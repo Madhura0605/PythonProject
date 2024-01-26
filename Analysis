@@ -1,0 +1,80 @@
+import pandas as pd
+from datetime import timedelta
+from google.colab import files
+
+def read_file(file_path):
+    try:
+        # Read the Excel file
+        df = pd.read_excel(file_path)
+        return df
+    except Exception as e:
+        print(f"Error reading the file: {e}")
+        return None
+
+def analyze_file(df):
+    if df is None:
+        print("Error: DataFrame is None. Please check the file format.")
+        return
+
+    # Identify columns related to time and employee names
+    time_columns = ['Time', 'Time Out']
+    employee_name_column = 'Employee Name'
+
+    # Ensure required columns are present in the DataFrame
+    required_columns = time_columns + [employee_name_column]
+    for column in required_columns:
+        if column not in df.columns:
+            print(f"Error: Column '{column}' not found in the DataFrame. Please check the file format.")
+            return
+
+    # Initialize empty lists to store results
+    consecutive_days_workers = []
+    short_break_workers = []
+    long_shift_workers = []
+
+    # Iterate through each row in the DataFrame
+    for index, row in df.iterrows():
+        # a) Check for employees who have worked for 7 consecutive days
+        start_time_col, end_time_col = time_columns
+        if pd.notna(row[start_time_col]):
+            start_date = row[start_time_col]
+            end_date = row[end_time_col]
+            if start_date is not None and end_date is not None:
+                days_worked = (end_date - start_date).days + 1
+                if days_worked == 7:
+                    consecutive_days_workers.append(row[employee_name_column])
+
+        # b) Check for employees with less than 10 hours between shifts but greater than 1 hour
+        if index > 0 and pd.notna(row[end_time_col]) and pd.notna(df.at[index - 1, start_time_col]):
+            time_out_prev = df.at[index - 1, end_time_col]
+            time_in_current = row[start_time_col]
+            if time_out_prev is not None and time_in_current is not None:
+                hours_between_shifts = (time_in_current - time_out_prev).seconds / 3600
+                if 1 < hours_between_shifts < 10:
+                    short_break_workers.append(row[employee_name_column])
+
+        # c) Check for employees who have worked for more than 14 hours in a single shift
+        if pd.notna(row[end_time_col]) and pd.notna(row[start_time_col]):
+            time_in = row[start_time_col]
+            time_out = row[end_time_col]
+            if time_in is not None and time_out is not None:
+                shift_duration = (time_out - time_in).seconds / 3600
+                if shift_duration > 14:
+                    long_shift_workers.append(row[employee_name_column])
+
+    # Print results
+    print("Employees who have worked for 7 consecutive days:", consecutive_days_workers)
+    print("Employees with less than 10 hours between shifts but greater than 1 hour:", short_break_workers)
+    print("Employees who have worked for more than 14 hours in a single shift:", long_shift_workers)
+
+if _name_ == "_main_":
+    # Upload the file
+    uploaded = files.upload()
+
+    # Get the path of the uploaded file
+    file_path = list(uploaded.keys())[0]
+
+    # Read the file and perform analysis
+    data_frame = read_file(file_path)
+    if data_frame is not None:
+        analyze_file(data_frame)
